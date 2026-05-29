@@ -275,8 +275,8 @@
           heartContainer.classList.remove('pulse');
           heartContainer.classList.add('broken');
           
-          // Kırılma sesini çal (break.mp3)
-          shatterAudio.play().catch(e => console.log("Kırılma sesi çalınamadı:", e));
+          // Kırılma sesini çalmayı dene, başarısız olursa yapay retro ses üret
+          triggerShatterSound();
           
           // Görsel sarsıntı ve parlama efekti
           stage.classList.add('flash-active', 'shake-active');
@@ -303,7 +303,7 @@
 
         }, 9000);
 
-      }, 1s);
+      }, 1000); // <-- '1s' yazımı '1000' olarak düzeltildi (Syntax hatası giderildi)
     });
 
     // Harf harf yazdırma (Typewriter) fonksiyonu
@@ -317,6 +317,46 @@
         setTimeout(() => {
           typeWriter(text, i + 1);
         }, 110); // Klasik Undertale yazı akış hızı
+      }
+    }
+
+    // break.mp3 dosyasını çalmayı dener, yoksa otomatik sentezleyiciyi devreye sokar
+    function triggerShatterSound() {
+      shatterAudio.play().catch(e => {
+        console.warn("break.mp3 bulunamadı veya yüklenemedi. Yapay retro ses devreye giriyor.", e);
+        playSynthShatter();
+      });
+    }
+
+    // Web Audio API ile yapay 8-bit kırılma sesi (break.mp3 404 uyarısı verse dahi çalışır)
+    function playSynthShatter() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const bufferSize = ctx.sampleRate * 0.35; 
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(1800, ctx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(9000, ctx.currentTime + 0.3);
+        
+        const gainNode = ctx.createGain();
+        gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        
+        noise.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        noise.start();
+      } catch (e) {
+        console.log("Ses sentezlenemedi:", e);
       }
     }
 
